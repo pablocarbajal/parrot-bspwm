@@ -1,0 +1,4 @@
+# Saltos de linea LF siempre (un .sh con CRLF falla en Linux)
+* text=auto eol=lf
+*.sh text eol=lf
+*.md text eol=lf

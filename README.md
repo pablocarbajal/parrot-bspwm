@@ -18,7 +18,7 @@ cd parrot-bspwm
 # 2. Mira lo que haría, sin cambiar nada:
 ./bspwm-parrot.sh --simular
 
-# 3. Instala (--teclado es = España, --teclado latam = Latinoamérica):
+# 3. Instala (--teclado es = España, latam = Latinoamérica, us = inglés ANSI):
 ./bspwm-parrot.sh --teclado es
 ```
 
@@ -30,7 +30,7 @@ Después cierra la sesión y elige **bspwm** en la pantalla de inicio. Para volv
 | --- | --- |
 | `--simular` | Muestra lo que haría, sin cambiar nada |
 | `--arreglar-repo` | Apunta `apt` a `https://deb.parrot.sh/direct/parrot/` (con copia de seguridad) |
-| `--teclado es\|latam` | Teclado de la sesión bspwm (por defecto `es`) |
+| `--teclado es\|latam\|us` | Teclado de la sesión bspwm: `es` España, `latam` Latinoamérica, `us` inglés ANSI (por defecto `es`) |
 | `--fondo RUTA` | Imagen de fondo de pantalla |
 | `--ayuda` | Muestra la ayuda |
 
@@ -46,6 +46,13 @@ Después cierra la sesión y elige **bspwm** en la pantalla de inicio. Para volv
 | `Super + ←↓↑→` | Moverse entre ventanas |
 | `Super + Alt + R` | Recargar bspwm |
 | `Super + Alt + Q` | Salir de bspwm |
+
+## Protecciones (para evitar problemas de instalaciones anteriores)
+
+- **Recursos de la VM:** antes de instalar nada, el script detecta la RAM y los núcleos. Si hay **menos de 4 GB de RAM** o **menos de 2 núcleos**, muestra una advertencia recomendando subir los recursos de la VM y pregunta si quieres continuar. En una VM de "4 GB" el sistema puede ver un poco menos de 4 GB y saltar el aviso.
+- **kitty sin zsh:** si `~/.config/kitty/kitty.conf` tiene `shell zsh` pero `zsh` no está instalado, el script comenta esa línea, añade `shell bash` y guarda una copia (`kitty.conf.copia-FECHA`). Así se evita el error `Failed to launch child: zsh`.
+- **Fondo sin mosaico:** el `bspwmrc` usa siempre `feh --bg-fill`, nunca `--bg-center` ni `--bg-tile`, para que el fondo no se repita al cambiar la resolución.
+- **Teclado validado:** `--teclado` solo acepta `es`, `latam` o `us`; cualquier otro valor da error antes de tocar nada.
 
 ## Qué hace y qué no
 

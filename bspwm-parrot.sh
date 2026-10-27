@@ -13,7 +13,8 @@
 #   ./bspwm-parrot.sh --simular            # solo muestra lo que haria
 #   ./bspwm-parrot.sh --arreglar-repo      # arregla el error "Redirection ... is forbidden"
 #   ./bspwm-parrot.sh                      # instala
-#   ./bspwm-parrot.sh --teclado latam      # instala con teclado latinoamericano (por defecto: es)
+#   ./bspwm-parrot.sh --teclado latam      # teclado latinoamericano
+#   ./bspwm-parrot.sh --teclado us         # teclado inglés ANSI (por defecto: es)
 #   ./bspwm-parrot.sh --fondo ~/Descargas/dragon.jpg
 #   ./bspwm-parrot.sh --ayuda
 
@@ -27,24 +28,49 @@ FONDO=""
 FECHA="$(date +%Y%m%d-%H%M%S)"
 REPO_DIRECTO="https://deb.parrot.sh/direct/parrot/"
 
+# Distribuciones de teclado permitidas para --teclado (es = España, latam = Latinoamérica, us = inglés ANSI).
+DISTRIBUCIONES_DE_TECLADO_VALIDAS=(es latam us)
+
+# Recursos mínimos recomendados para la máquina virtual.
+KILOBYTES_POR_GIGABYTE=1048576
+MINIMO_RAM_GIGABYTES=4
+MINIMO_RAM_KILOBYTES=$(( MINIMO_RAM_GIGABYTES * KILOBYTES_POR_GIGABYTE ))
+MINIMO_NUCLEOS_CPU=2
+
+# Modo con el que feh ajusta el fondo: --bg-fill llena la pantalla sin repetir la imagen en mosaico,
+# aunque cambie la resolución (nunca usar --bg-center ni --bg-tile).
+MODO_FONDO_FEH="--bg-fill"
+
 info()  { echo -e "\e[36m➜\e[0m $*"; }
 ok()    { echo -e "\e[32m✓\e[0m $*"; }
 aviso() { echo -e "\e[33m!\e[0m $*"; }
 error() { echo -e "\e[31m✗\e[0m $*" >&2; }
 
-ayuda() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
+# Muestra los comentarios del encabezado (desde la línea 2 hasta la primera línea en blanco).
+ayuda() { sed -n '2,/^$/{/^$/!p}' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --simular) SIMULAR=1 ;;
     --arreglar-repo) ARREGLAR_REPO=1 ;;
-    --teclado) TECLADO="${2:?Falta el valor de --teclado (por ejemplo es o latam)}"; shift ;;
+    --teclado) TECLADO="${2:?Falta el valor de --teclado (es, latam o us)}"; shift ;;
     --fondo) FONDO="${2:?Falta la ruta de --fondo}"; shift ;;
     --ayuda|-h|--help) ayuda; exit 0 ;;
     *) error "Opcion desconocida: $1"; ayuda; exit 2 ;;
   esac
   shift
 done
+
+# Comprueba que la distribución de teclado pedida sea una de las permitidas.
+validar_distribucion_de_teclado() {
+  local distribucion_permitida
+  for distribucion_permitida in "${DISTRIBUCIONES_DE_TECLADO_VALIDAS[@]}"; do
+    [[ "$TECLADO" == "$distribucion_permitida" ]] && return 0
+  done
+  error "Teclado no válido: '$TECLADO'. Opciones: ${DISTRIBUCIONES_DE_TECLADO_VALIDAS[*]}"
+  exit 2
+}
+validar_distribucion_de_teclado
 
 # Ejecuta un comando, o solo lo muestra si estamos simulando.
 run() {
@@ -107,8 +133,38 @@ if (( ARREGLAR_REPO )); then
   exit 0
 fi
 
+# ---------------------------------------------------------------- recursos de la máquina
+# Se comprueban antes de instalar nada: con poca RAM o pocos núcleos la instalación se vuelve muy lenta o falla.
+revisar_recursos_de_la_maquina() {
+  local ram_total_kilobytes nucleos_de_cpu ram_total_gigabytes
+  ram_total_kilobytes="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+  nucleos_de_cpu="$(nproc)"
+  ram_total_gigabytes="$(awk -v kilobytes="$ram_total_kilobytes" -v por_gigabyte="$KILOBYTES_POR_GIGABYTE"       'BEGIN { printf "%.1f", kilobytes / por_gigabyte }')"
+
+  info "Recursos detectados: ${ram_total_gigabytes} GB de RAM y ${nucleos_de_cpu} núcleos de CPU."
+
+  RECURSOS_INSUFICIENTES=0
+  if (( ram_total_kilobytes < MINIMO_RAM_KILOBYTES )); then
+    RECURSOS_INSUFICIENTES=1
+    aviso "Tienes menos de ${MINIMO_RAM_GIGABYTES} GB de RAM (${ram_total_gigabytes} GB)."
+  fi
+  if (( nucleos_de_cpu < MINIMO_NUCLEOS_CPU )); then
+    RECURSOS_INSUFICIENTES=1
+    aviso "Tienes menos de ${MINIMO_NUCLEOS_CPU} núcleos de CPU (${nucleos_de_cpu})."
+  fi
+  if (( RECURSOS_INSUFICIENTES )); then
+    aviso "Recomendación: apaga la VM y sube sus recursos (al menos ${MINIMO_RAM_GIGABYTES} GB de RAM y ${MINIMO_NUCLEOS_CPU} núcleos) antes de continuar."
+  fi
+}
+RECURSOS_INSUFICIENTES=0
+revisar_recursos_de_la_maquina
+
 # ---------------------------------------------------------------- confirmacion
 if (( ! SIMULAR )); then
+  if (( RECURSOS_INSUFICIENTES )); then
+    read -r -p "Tu máquina tiene pocos recursos. ¿Quieres continuar de todas formas? [s/N] " respuesta_recursos
+    [[ "$respuesta_recursos" =~ ^[sSyY]$ ]] || { info "Cancelado. No se cambió nada. Sube los recursos de la VM y vuelve a ejecutar."; exit 0; }
+  fi
   echo
   echo "Voy a instalar bspwm, sxhkd, polybar, picom, rofi, feh y otros con apt,"
   echo "y a crear la configuracion en ~/.config (con copia de seguridad de lo existente)."
@@ -186,9 +242,10 @@ bspc config gapless_monocle      true
 bspc config focused_border_color "#e0245e"
 bspc config normal_border_color  "#333333"
 
-# Fondo de pantalla (copia una imagen a ~/.config/bspwm/fondo para usarla)
+# Fondo de pantalla (copia una imagen a ~/.config/bspwm/fondo para usarla).
+# --bg-fill llena la pantalla sin repetir la imagen en mosaico al cambiar la resolución.
 if [ -f "\$HOME/.config/bspwm/fondo" ]; then
-  feh --bg-fill "\$HOME/.config/bspwm/fondo"
+  feh $MODO_FONDO_FEH "\$HOME/.config/bspwm/fondo"
 else
   xsetroot -solid "#10141c"
 fi
@@ -314,6 +371,30 @@ if [[ -n "$FONDO" ]]; then
     aviso "No existe el archivo de fondo: $FONDO"
   fi
 fi
+
+# ---------------------------------------------------------------- kitty sin zsh
+# Si kitty.conf pide "shell zsh" pero zsh no está instalado, kitty falla con "Failed to launch child: zsh".
+revisar_shell_de_kitty() {
+  local archivo_kitty="$HOME/.config/kitty/kitty.conf"
+  local patron_shell_zsh='^[[:space:]]*shell[[:space:]]+([^[:space:]]*/)?zsh([[:space:]]|$)'
+  [[ -f "$archivo_kitty" ]] || return 0
+  grep -qE "$patron_shell_zsh" "$archivo_kitty" || return 0
+  if command -v zsh >/dev/null 2>&1; then return 0; fi
+
+  aviso "kitty.conf usa 'shell zsh' pero zsh no está instalado: lo comento y uso bash."
+  run cp -a "$archivo_kitty" "$archivo_kitty.copia-$FECHA"
+  run sed -i -E "\#${patron_shell_zsh}# s/^/# /" "$archivo_kitty"
+  if (( SIMULAR )); then
+    echo "   [simulacion] se añadiría 'shell bash' al final de $archivo_kitty"
+  else
+    printf '
+# Añadido por bspwm-parrot.sh: zsh no está instalado
+shell bash
+' >> "$archivo_kitty"
+  fi
+  ok "kitty usará bash. Copia del archivo original: $archivo_kitty.copia-$FECHA"
+}
+revisar_shell_de_kitty
 
 # ---------------------------------------------------------------- 5. comprobacion final
 info "5/5 Comprobando que quedo todo..."

@@ -60,3 +60,37 @@ Después cierra la sesión y elige **bspwm** en la pantalla de inicio. Para volv
 - Escribe una configuración mínima en `~/.config` (tu configuración anterior se mueve a `~/.config-backup-bspwm-FECHA`).
 - No ejecuta `parrot-upgrade`: hazlo tú antes.
 - No cambia tu sesión de KDE.
+
+## Opción B: el entorno de gh0stzk en una máquina Arch
+
+El entorno de [gh0stzk/dotfiles](https://github.com/gh0stzk/dotfiles) (bspwm con 18 temas) **solo se instala en Arch y derivadas**, no en Parrot. Para esa opción está `arch-gh0stzk.sh`, que automatiza su instalador oficial.
+
+> ⚠️ **No está probado en una máquina Arch real.** Hace falta tener **Arch o una derivada ya instalada** (por ejemplo EndeavourOS): el script no instala el sistema. Haz una instantánea antes.
+
+```bash
+git clone https://github.com/pablocarbajal/parrot-bspwm.git
+cd parrot-bspwm
+
+# 1. Descarga y revisa el instalador, sin instalar nada:
+./arch-gh0stzk.sh --simular
+
+# 2. Instala (sin Neovim ni Firefox de gh0stzk). Añade --con-nvim y/o --con-firefox si los quieres:
+./arch-gh0stzk.sh
+```
+
+| Opción | Qué hace |
+| --- | --- |
+| `--simular` | Descarga el instalador, muestra su SHA-256 y lo que modifica, y se detiene |
+| `--con-nvim` | Contesta que sí a su configuración de Neovim (por defecto no) |
+| `--con-firefox` | Contesta que sí a su tema de Firefox (por defecto no) |
+| `--hash SHA256` | Aborta si el instalador descargado no tiene ese SHA-256 |
+| `--reiniciar` | Reinicia la máquina al terminar |
+
+Lo que hace el script:
+
+- Comprueba que es Arch, que hay systemd y que la VM tiene al menos 4 GB de RAM y 2 núcleos.
+- Descarga el instalador, comprueba su sintaxis, y te enseña qué líneas tocan el sistema (repositorios de terceros en `/etc/pacman.conf`, claves, `chsh`).
+- Actualiza todo el sistema con `pacman -Syu` antes de empezar, porque el instalador usa `pacman -Syy`, que puede dejar una actualización a medias.
+- Contesta por ti las cuatro preguntas del instalador (continuar, Neovim, Firefox, reiniciar) y guarda un registro en `~/arch-gh0stzk-FECHA.log`.
+
+Importante: el instalador **añade los repositorios de gh0stzk y de Chaotic-AUR y confía en sus claves**. Son de terceros: úsalo en una máquina virtual.
